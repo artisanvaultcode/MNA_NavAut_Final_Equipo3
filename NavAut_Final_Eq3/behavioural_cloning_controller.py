@@ -1,4 +1,3 @@
-import threading
 from controller import Display, Keyboard, Robot, Camera
 from vehicle import Car, Driver
 import numpy as np
@@ -19,24 +18,8 @@ def get_image(camera):
 
 def preprocess_image(image):
     image = cv2.resize(image, (200, 66))
-    image = image / 255.0 - 0.5  # Normalizar la imagen
+    image = image / 255.0 - 0.5
     return np.expand_dims(image, axis=0)
-
-
-threshold = 0.01
-
-
-def adjust_steering_angle(angle):
-    # Verificar si el ángulo supera el umbral positivo o negativo
-    if angle > threshold:
-        # Multiplicar por 10 y limitar a 0.25
-        return min(angle * 10, 0.25)
-    elif angle < -threshold:
-        # Multiplicar por 10 y limitar a -0.25
-        return max(angle * 10, -0.25)
-    else:
-        # Si el ángulo está dentro del umbral, simplemente retornar el ángulo original
-        return angle
 
 
 def main():
@@ -45,35 +28,54 @@ def main():
 
     camera = robot.getDevice("camera")
     camera.enable(int(robot.getBasicTimeStep()))
+
     # Create keyboard instance
     keyboard = Keyboard()
     keyboard.enable(int(robot.getBasicTimeStep()))
-    max_speed = 30
-    min_speed = 10
-    current_speed = max_speed
+
+    current_speed = 50
     driver.setCruisingSpeed(current_speed)
-    steering_angle = [0]  # Usamos una lista para permitir modificaciones dentro del hilo
+
+    range_sensor = robot.getDevice("range-finder")
+    range_sensor.enable(int(robot.getBasicTimeStep()))
+
+    max_distance_threshold = 20  # Distancia máxima de umbral en metros
+    min_distance_threshold = max_distance_threshold / 2  # Distancia mínima de umbral
+
+    cruising_speed = 30  # Velocidad normal cuando no hay obstáculos
+    reduced_speed = 15  # Velocidad reducida para mantener distancia
+
+    max_angle = 0.25
+    min_angle = -0.25
 
     while robot.step() != -1:
-        image = get_image(camera)
-        processed_image = preprocess_image(image)
+        manual_control = False
 
-        # Calcular el ángulo de dirección de manera asincrónica
-        def prediction_thread():
-            angle = model.predict(processed_image)[0][0]
-            print(f"Raw predicted steering angle: {angle:.4f}")
-            steering_angle[0] = adjust_steering_angle(angle)
 
-        threading.Thread(target=prediction_thread).start()
+        if not manual_control:
+            image = get_image(camera)
+            processed_image = preprocess_image(image)
+            normalized_angle = model.predict(processed_image)[0][0]
+            print(f"Raw predicted steering angle: {normalized_angle:.4f}")
 
-        driver.setSteeringAngle(steering_angle[0])
+            # Desnormalizar el ángulo
+            angle = normalized_angle # ((normalized_angle + 1) / 2) * (max_angle - min_angle) + min_angle
+            steering_angle = angle
 
-        key = keyboard.getKey()
-        if key == Keyboard.UP:
-            current_speed = max_speed
-        elif key == Keyboard.DOWN:
-            current_speed = min_speed
-        driver.setCruisingSpeed(current_speed)
+        print(f"Setting steering angle: {steering_angle:.4f}")
+        driver.setSteeringAngle(steering_angle)
+
+        sensor_data = range_sensor.getRangeImage()
+        min_distance = np.min(sensor_data)  # Encontrar la distancia mínima detectada
+
+        if min_distance < min_distance_threshold:
+            print(f"Vehículo o peatón demasiado cerca a {min_distance:.2f} metros, deteniendo vehículo.")
+            driver.setCruisingSpeed(0)
+        elif min_distance < max_distance_threshold:
+            print(f"Vehículo o peatón detectado a {min_distance:.2f} metros, reduciendo velocidad.")
+            driver.setCruisingSpeed(reduced_speed)
+        else:
+            driver.setCruisingSpeed(cruising_speed)
 
 
 if __name__ == "__main__":

@@ -63,19 +63,18 @@ def main():
             writer = csv.writer(file)
             writer.writerow(['Filename', 'Steering Angle'])
 
-    # Capture image at intervals
-    capture_interval = 20  # Number of timesteps between captures
-    counter = 0
-
-    # Initial speed and steering settings
+    # Initial settings
     max_speed = 50  # Maximum speed
     min_speed = 10  # Minimum speed
     current_speed = min_speed  # Start at minimum speed
     driver.setCruisingSpeed(current_speed)
+    fast_capture_interval = 5  # Fast capture when key pressed
+    slow_capture_interval = 50  # Slow capture when no key pressed
+    capture_interval = slow_capture_interval  # Initial capture interval
+    counter = 0
 
     while driver.step() != -1:
         if counter % capture_interval == 0:
-            # Capture and save images periodically
             image = get_image(camera)
             grey_image = greyscale_cv2(image)
             display_image(display_img, grey_image)
@@ -92,13 +91,17 @@ def main():
         if key == Keyboard.UP:
             current_speed = max_speed
             driver.setCruisingSpeed(current_speed)
+            capture_interval = fast_capture_interval
         elif key == Keyboard.DOWN:
             current_speed = min_speed
             driver.setCruisingSpeed(current_speed)
+            capture_interval = slow_capture_interval
         elif key == Keyboard.RIGHT:
             driver.setSteeringAngle(0.25 if current_speed == min_speed else 0.1)
+            capture_interval = fast_capture_interval
         elif key == Keyboard.LEFT:
             driver.setSteeringAngle(-0.25 if current_speed == min_speed else -0.1)
+            capture_interval = fast_capture_interval
         else:
             driver.setSteeringAngle(0)  # Reset steering angle when not turning
 
