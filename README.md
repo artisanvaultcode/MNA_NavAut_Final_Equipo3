@@ -1,4 +1,4 @@
-##Proyecto de Clonación de Comportamiento
+Proyecto de Clonación de Comportamiento
 
 Los objetivos / pasos de este proyecto son los siguientes:
 
